@@ -130,8 +130,7 @@ def save_to_parse(user, link, summary, thumbnail_url):
         "tags": summary["tags"],
         "location": location_str,
         "geocode": geo_point,
-        "thumbnail_url": thumbnail_url,
-        "media_url": summary.get("media_url") if summary.get("media_url", "").startswith("https://lookaside.fbsbx.com/") else None
+        "thumbnail_url": thumbnail_url
     }
 
     if parse_file:
@@ -154,7 +153,6 @@ def analyze():
     parsed = urlparse(raw_url)
     url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
     user = data.get("user", "")
-    media_url = data.get("media_url", "")
     print("Request received for:", url)
 
     description, thumbnail_url = extract_ig_data(url)
@@ -164,9 +162,6 @@ def analyze():
     print("LLM raw response:", llm_result)
 
     summary_json = json.loads(llm_result["choices"][0]["message"]["content"])
-
-    if media_url.startswith("https://lookaside.fbsbx.com/"):
-        summary_json["media_url"] = media_url
 
     print("Parsed summary:", summary_json)
 
