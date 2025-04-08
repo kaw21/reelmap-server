@@ -2,10 +2,15 @@ from flask import Flask, request, jsonify
 import requests
 from bs4 import BeautifulSoup
 import os
+import json
 
 app = Flask(__name__)
 
+# 🔐 Load environment variables
 AIML_API_KEY = os.environ.get("AIMLAPI_KEY")
+PARSE_SERVER_URL = os.environ.get("PARSE_SERVER_URL")
+PARSE_APP_ID = os.environ.get("PARSE_APP_ID")
+PARSE_API_KEY = os.environ.get("PARSE_API_KEY")
 
 def extract_ig_data(url):
     headers = {
@@ -22,7 +27,6 @@ def extract_ig_data(url):
         elif tag.get("property") == "og:image":
             thumb = tag.get("content")
 
-    # Fallback for testing
     if not desc:
         desc = "This Instagram post features a travel destination or food experience shared by a user."
 
@@ -31,7 +35,7 @@ def extract_ig_data(url):
 def analyze_with_llm(desc):
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {os.environ.get('AIMLAPI_KEY')}"
+        "Authorization": f"Bearer {AIML_API_KEY}"
     }
 
     body = {
@@ -39,7 +43,7 @@ def analyze_with_llm(desc):
         "messages": [
             {
                 "role": "system",
-                "content": "You are an Instagram Reels analyzer. Given a user-written post or caption, return a JSON object with the following keys: title, description, tags (as a list), location, and geocode (Google Maps-friendly location). Respond ONLY with JSON.",
+                "content": "You are an Instagram Reels analyzer. Given a user-written post or caption, return a JSON object with the following keys: title, description, tags (as a list), location, and geocode. Respond ONLY with JSON."
             },
             {
                 "role": "user",
@@ -54,6 +58,27 @@ def analyze_with_llm(desc):
     r = requests.post("https://api.aimlapi.com/v1/chat/completions", headers=headers, json=body)
     return r.json()
 
+def save_to_parse(user, link, summary, thumbnail):
+    headers = {
+        "X-Parse-Application-Id": PARSE_APP_ID,
+        "X-Parse-REST-API-Key": PARSE_API_KEY,
+        "Content-Type": "application/json"
+    }
+
+    data = {
+        "username": user,
+        "ig_link": link,
+        "title": summary["title"],
+        "description": summary["description"],
+        "tags": summary["tags"],
+        "location": summary.get("location", {}),
+        "geocode": summary["geocode"],
+        "thumbnail": thumbnail
+    }
+
+    r = requests.post(PARSE_SERVER_URL, headers=headers, json=data)
+    return r.status_code, r.text
+
 @app.route("/analyze", methods=["POST"])
 def analyze():
     data = request.json
@@ -63,12 +88,16 @@ def analyze():
     description, thumbnail = extract_ig_data(url)
     llm_result = analyze_with_llm(description)
 
+    summary_json = json.loads(llm_result["choices"][0]["message"]["content"])
+    status, response = save_to_parse(user, url, summary_json, thumbnail)
+
+    tags_str = ", ".join([f"#{tag}" for tag in summary_json["tags"]])
+    reply_text = f"\ud83d\ude80 Saved!\n\ud83d\udccd {summary_json['title']}\n\ud83c\udf0d Location: {summary_json['geocode']}\n\ud83d\udcc4 Tags: {tags_str}\n\ud83d\udcf7 [View Post]({url})"
+
     return jsonify({
-        "user": user,
-        "link": url,
-        "thumbnail": thumbnail,
-        "description": description,
-        "llm": llm_result
+        "messages": [
+            {"text": reply_text}
+        ]
     })
 
 if __name__ == "__main__":
