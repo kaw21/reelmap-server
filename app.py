@@ -86,6 +86,7 @@ def save_to_parse(user, link, summary, thumbnail_url):
     }
 
     r = requests.post(PARSE_SERVER_URL, headers=headers, json=data)
+    print("Parse response:", r.status_code, r.text)
     return r.status_code, r.text
 
 @app.route("/analyze", methods=["POST"])
@@ -93,15 +94,22 @@ def analyze():
     data = request.json
     url = data.get("link", "")
     user = data.get("user", "")
+    print("Request received for:", url)
 
     description, thumbnail_url = extract_ig_data(url)
+    print("Extracted description:", description[:100])
+
     llm_result = analyze_with_llm(description)
+    print("LLM raw response:", llm_result)
 
     summary_json = json.loads(llm_result["choices"][0]["message"]["content"])
+    print("Parsed summary:", summary_json)
+
+    print("Saving to Parse...")
     status, response = save_to_parse(user, url, summary_json, thumbnail_url)
 
     tags_str = ", ".join([f"#{tag}" for tag in summary_json["tags"]])
-    reply_text = f"\ud83d\ude80 Saved!\n\ud83d\udccd {summary_json['title']}\n\ud83c\udf0d Location: {summary_json['geocode']}\n\ud83d\udcc4 Tags: {tags_str}\n\ud83d\udcf7 [View Post]({url})"
+    reply_text = f"🚀 Saved!\n📍 {summary_json['title']}\n🌍 Location: {summary_json['geocode']}\n📄 Tags: {tags_str}\n📷 [View Post]({url})"
 
     return jsonify({
         "messages": [
