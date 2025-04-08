@@ -29,46 +29,29 @@ def extract_ig_data(url):
     return desc, thumb
 
 def analyze_with_llm(desc):
-    prompt = f"""
-You are an Instagram Reels analyzer. Given the content below, extract and return:
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {os.environ.get('AIMLAPI_KEY')}"
+    }
 
-- title (short summary)
-- description (1–2 sentences)
-- tags (3–5 relevant keywords)
-- location (city or place)
-- geocode (Google Maps friendly location string)
-
-Content:
-\"{desc}\"
-
-Output in JSON only.
-"""
-
-    payload = {
-        "prompt": prompt,
+    body = {
+        "model": "meta-llama/Llama-3.2-3B-Instruct-Turbo",
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are an Instagram Reels analyzer. Given a user-written post or caption, return a JSON object with the following keys: title, description, tags (as a list), location, and geocode (Google Maps-friendly location). Respond ONLY with JSON.",
+            },
+            {
+                "role": "user",
+                "content": desc
+            }
+        ],
         "temperature": 0.7,
         "top_p": 0.9,
         "max_tokens": 512
     }
 
-    headers = {
-        "Content-Type": "application/json",
-        "X-API-Key": AIML_API_KEY
-    }
-
-    r = requests.post(
-    	"https://api.aimlapi.com/v1/completions",
-    	json={
-        	"model": "meta-llama/Llama-3.2-3B-Instruct-Turbo",
-        	"prompt": prompt,
-        	"temperature": 0.7,
-        	"top_p": 0.9,
-        	"max_tokens": 512
-    	},
-    	headers=headers
-	)
-
-
+    r = requests.post("https://api.aimlapi.com/v1/chat/completions", headers=headers, json=body)
     return r.json()
 
 @app.route("/analyze", methods=["POST"])
