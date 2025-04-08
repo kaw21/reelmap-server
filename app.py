@@ -8,7 +8,10 @@ app = Flask(__name__)
 AIML_API_KEY = os.environ.get("AIMLAPI_KEY")
 
 def extract_ig_data(url):
-    headers = {"User-Agent": "Mozilla/5.0"}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        "Accept-Language": "en-US,en;q=0.9"
+    }
     r = requests.get(url, headers=headers)
     soup = BeautifulSoup(r.text, "html.parser")
     desc, thumb = "", ""
@@ -18,6 +21,10 @@ def extract_ig_data(url):
             desc = tag.get("content")
         elif tag.get("property") == "og:image":
             thumb = tag.get("content")
+
+    # Fallback for testing
+    if not desc:
+        desc = "This Instagram post features a travel destination or food experience shared by a user."
 
     return desc, thumb
 
@@ -50,10 +57,17 @@ Output in JSON only.
     }
 
     r = requests.post(
-        "https://api.aimlapi.com/api/meta/llama-3.2-3b-instruct-turbo",
-        json=payload,
-        headers=headers
-    )
+    	"https://api.aimlapi.com/v1/completions",
+    	json={
+        	"model": "meta-llama/Llama-3.2-3B-Instruct-Turbo",
+        	"prompt": prompt,
+        	"temperature": 0.7,
+        	"top_p": 0.9,
+        	"max_tokens": 512
+    	},
+    	headers=headers
+	)
+
 
     return r.json()
 
