@@ -8,7 +8,7 @@ app = Flask(__name__)
 
 # 🔐 Load environment variables
 AIML_API_KEY = os.environ.get("AIMLAPI_KEY")
-PARSE_SERVER_URL = os.environ.get("PARSE_SERVER_URL")
+PARSE_SERVER_URL = os.environ.get("PARSE_SERVER_URL")  # should be like: https://yourapp.scalabl.cloud/parse
 PARSE_APP_ID = os.environ.get("PARSE_APP_ID")
 PARSE_API_KEY = os.environ.get("PARSE_API_KEY")
 
@@ -85,7 +85,8 @@ def save_to_parse(user, link, summary, thumbnail_url):
         "thumbnail_url": thumbnail_url
     }
 
-    r = requests.post(PARSE_SERVER_URL, headers=headers, json=data)
+    full_url = PARSE_SERVER_URL.rstrip("/") + "/classes/aRM_ReelsData"
+    r = requests.post(full_url, headers=headers, json=data)
     print("Parse response:", r.status_code, r.text)
     return r.status_code, r.text
 
