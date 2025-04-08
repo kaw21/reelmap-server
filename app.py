@@ -66,7 +66,9 @@ def save_to_parse(user, link, summary, thumbnail_url):
         "Content-Type": "application/json"
     }
 
-    location_data = summary.get("geocode", {})
+    location_data = summary.get("geocode")
+    if isinstance(location_data, str):
+        location_data = None
     geo_point = None
     if isinstance(location_data, dict) and "lat" in location_data and "lng" in location_data:
         geo_point = {
@@ -123,9 +125,9 @@ def save_to_parse(user, link, summary, thumbnail_url):
         "description": summary["description"],
         "tags": summary["tags"],
         "location": summary["geocode"],  # string version
-        "geocode": geo_point,             # GeoPoint for mapping
+        "geocode": geo_point,
         "thumbnail_url": thumbnail_url,
-        "media_url": summary.get("media_url", thumbnail_url)
+        "media_url": summary.get("media_url") if summary.get("media_url", "").startswith("https://lookaside.fbsbx.com/") else None
     }
 
     if parse_file:
@@ -144,6 +146,7 @@ def analyze():
     data = request.json
     url = data.get("link", "")
     user = data.get("user", "")
+    media_url = data.get("media_url", "")
     print("Request received for:", url)
 
     description, thumbnail_url = extract_ig_data(url)
@@ -153,13 +156,17 @@ def analyze():
     print("LLM raw response:", llm_result)
 
     summary_json = json.loads(llm_result["choices"][0]["message"]["content"])
+
+    if media_url.startswith("https://lookaside.fbsbx.com/"):
+        summary_json["media_url"] = media_url
+
     print("Parsed summary:", summary_json)
 
     print("Saving to Parse...")
     status, response = save_to_parse(user, url, summary_json, thumbnail_url)
 
     tags_str = ", ".join([f"#{tag}" for tag in summary_json["tags"]])
-    reply_text = f"🚀 Saved!\n📍 {summary_json['title']}\n🌍 Location: {summary_json['geocode']}\n📄 Tags: {tags_str}\n📷 [View Post]({url})"
+    reply_text = f"\ud83d\ude80 Saved!\n\ud83d\udccd {summary_json['title']}\n\ud83c\udf0d Location: {summary_json['geocode']}\n\ud83d\udcc4 Tags: {tags_str}\n\ud83d\udcf7 [View Post]({url})"
 
     return jsonify({
         "messages": [
