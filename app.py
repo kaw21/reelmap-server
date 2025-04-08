@@ -44,7 +44,7 @@ def analyze_with_llm(desc):
         "messages": [
             {
                 "role": "system",
-                "content": "You are an Instagram Reels analyzer. Given a user-written post or caption, return a JSON object with the following keys: title, description, tags (as a list), location (string), and geocode (object with lat and lng). Respond ONLY with JSON."
+                "content": "You are an Instagram Reels analyzer. Given a user-written post or caption, return a JSON object with the following keys: title, description, tags (as a list), location (string), and geocode (as lat/lng dictionary, even if estimated). Respond ONLY with JSON."
             },
             {
                 "role": "user",
@@ -118,13 +118,17 @@ def save_to_parse(user, link, summary, thumbnail_url):
     except Exception as e:
         print("Thumbnail upload failed:", e)
 
+    location_str = summary.get("location") or (
+        f"{location_data['lat']},{location_data['lng']}" if geo_point else ""
+    )
+
     data = {
         "username": user,
         "ig_link": link,
         "title": summary["title"],
         "description": summary["description"],
         "tags": summary["tags"],
-        "location": summary["geocode"],  # string version
+        "location": location_str,
         "geocode": geo_point,
         "thumbnail_url": thumbnail_url,
         "media_url": summary.get("media_url") if summary.get("media_url", "").startswith("https://lookaside.fbsbx.com/") else None
@@ -170,7 +174,7 @@ def analyze():
     status, response = save_to_parse(user, url, summary_json, thumbnail_url)
 
     tags_str = ", ".join([f"#{tag}" for tag in summary_json["tags"]])
-    reply_text = f"🚀 Saved!\n📍 {summary_json['title']}\n🌍 Location: {summary_json['geocode']}\n📄 Tags: {tags_str}\n📷 [View Post]({url})"
+    reply_text = f"🚀 Saved!\n📍 {summary_json['title']}\n🌍 Location: {summary_json.get('location') or summary_json['geocode']}\n📄 Tags: {tags_str}\n📷 [View Post]({url})"
 
     return jsonify({
         "messages": [
