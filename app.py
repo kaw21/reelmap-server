@@ -44,7 +44,7 @@ def analyze_with_llm(desc):
         "messages": [
             {
                 "role": "system",
-                "content": "You are an Instagram Reels analyzer. Given a user-written post or caption, return a JSON object with the following keys: title, description, tags (as a list), location, and geocode. Respond ONLY with JSON."
+                "content": "You are an Instagram Reels analyzer. Given a user-written post or caption, return a JSON object with the following keys: title, description, tags (as a list), location (string), and geocode (object with lat and lng). Respond ONLY with JSON."
             },
             {
                 "role": "user",
@@ -144,7 +144,11 @@ def save_to_parse(user, link, summary, thumbnail_url):
 @app.route("/analyze", methods=["POST"])
 def analyze():
     data = request.json
-    url = data.get("link", "")
+    from urllib.parse import urlparse
+
+    raw_url = data.get("link", "")
+    parsed = urlparse(raw_url)
+    url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
     user = data.get("user", "")
     media_url = data.get("media_url", "")
     print("Request received for:", url)
@@ -166,7 +170,7 @@ def analyze():
     status, response = save_to_parse(user, url, summary_json, thumbnail_url)
 
     tags_str = ", ".join([f"#{tag}" for tag in summary_json["tags"]])
-    reply_text = f"\ud83d\ude80 Saved!\n\ud83d\udccd {summary_json['title']}\n\ud83c\udf0d Location: {summary_json['geocode']}\n\ud83d\udcc4 Tags: {tags_str}\n\ud83d\udcf7 [View Post]({url})"
+    reply_text = f"🚀 Saved!\n📍 {summary_json['title']}\n🌍 Location: {summary_json['geocode']}\n📄 Tags: {tags_str}\n📷 [View Post]({url})"
 
     return jsonify({
         "messages": [
