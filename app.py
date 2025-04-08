@@ -58,12 +58,21 @@ def analyze_with_llm(desc):
     r = requests.post("https://api.aimlapi.com/v1/chat/completions", headers=headers, json=body)
     return r.json()
 
-def save_to_parse(user, link, summary, thumbnail):
+def save_to_parse(user, link, summary, thumbnail_url):
     headers = {
         "X-Parse-Application-Id": PARSE_APP_ID,
         "X-Parse-REST-API-Key": PARSE_API_KEY,
         "Content-Type": "application/json"
     }
+
+    location_data = summary.get("location", {})
+    geo_point = None
+    if isinstance(location_data, dict) and "lat" in location_data and "lng" in location_data:
+        geo_point = {
+            "__type": "GeoPoint",
+            "latitude": location_data["lat"],
+            "longitude": location_data["lng"]
+        }
 
     data = {
         "username": user,
@@ -71,9 +80,9 @@ def save_to_parse(user, link, summary, thumbnail):
         "title": summary["title"],
         "description": summary["description"],
         "tags": summary["tags"],
-        "location": summary.get("location", {}),
-        "geocode": summary["geocode"],
-        "thumbnail": thumbnail
+        "location": summary["geocode"],  # string version
+        "geocode": geo_point,             # GeoPoint for mapping
+        "thumbnail_url": thumbnail_url
     }
 
     r = requests.post(PARSE_SERVER_URL, headers=headers, json=data)
@@ -85,11 +94,11 @@ def analyze():
     url = data.get("link", "")
     user = data.get("user", "")
 
-    description, thumbnail = extract_ig_data(url)
+    description, thumbnail_url = extract_ig_data(url)
     llm_result = analyze_with_llm(description)
 
     summary_json = json.loads(llm_result["choices"][0]["message"]["content"])
-    status, response = save_to_parse(user, url, summary_json, thumbnail)
+    status, response = save_to_parse(user, url, summary_json, thumbnail_url)
 
     tags_str = ", ".join([f"#{tag}" for tag in summary_json["tags"]])
     reply_text = f"\ud83d\ude80 Saved!\n\ud83d\udccd {summary_json['title']}\n\ud83c\udf0d Location: {summary_json['geocode']}\n\ud83d\udcc4 Tags: {tags_str}\n\ud83d\udcf7 [View Post]({url})"
