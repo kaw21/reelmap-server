@@ -3,12 +3,13 @@ import requests
 from bs4 import BeautifulSoup
 import os
 import json
+import base64
 
 app = Flask(__name__)
 
 # 🔐 Load environment variables
 AIML_API_KEY = os.environ.get("AIMLAPI_KEY")
-PARSE_SERVER_URL = os.environ.get("PARSE_SERVER_URL")  # should be like: https://yourapp.scalabl.cloud/parse
+PARSE_SERVER_URL = os.environ.get("PARSE_SERVER_URL")  # should be like: https://pg-app-xxx.scalabl.cloud/1
 PARSE_APP_ID = os.environ.get("PARSE_APP_ID")
 PARSE_API_KEY = os.environ.get("PARSE_API_KEY")
 
@@ -65,7 +66,7 @@ def save_to_parse(user, link, summary, thumbnail_url):
         "Content-Type": "application/json"
     }
 
-    location_data = summary.get("location", {})
+    location_data = summary.get("geocode", {})
     geo_point = None
     if isinstance(location_data, dict) and "lat" in location_data and "lng" in location_data:
         geo_point = {
@@ -73,6 +74,47 @@ def save_to_parse(user, link, summary, thumbnail_url):
             "latitude": location_data["lat"],
             "longitude": location_data["lng"]
         }
+
+    # Fetch and convert thumbnail image to base64 for Parse File
+    parse_file = None
+    try:
+        image_response = requests.get(thumbnail_url)
+        if image_response.status_code == 200:
+            from PIL import Image
+            from io import BytesIO
+
+            image = Image.open(BytesIO(image_response.content)).convert("RGB")
+            width, height = image.size
+            if width > height:
+                if width > 1024:
+                    new_height = int((1024 / width) * height)
+                    image = image.resize((1024, new_height))
+            else:
+                if height > 1024:
+                    new_width = int((1024 / height) * width)
+                    image = image.resize((new_width, 1024))
+
+            buffer = BytesIO()
+            image.save(buffer, format="JPEG", quality=85)
+            encoded_image = base64.b64encode(buffer.getvalue()).decode('utf-8')
+            file_payload = {
+                "base64": encoded_image,
+                "contentType": "image/jpeg",
+                "name": "thumbnail.jpg"
+            }
+            file_upload = requests.post(
+                PARSE_SERVER_URL.rstrip("/") + "/files/thumbnail.jpg",
+                headers={
+                    "X-Parse-Application-Id": PARSE_APP_ID,
+                    "X-Parse-REST-API-Key": PARSE_API_KEY,
+                    "Content-Type": "application/json"
+                },
+                json=file_payload
+            )
+            if file_upload.status_code == 201:
+                parse_file = file_upload.json()
+    except Exception as e:
+        print("Thumbnail upload failed:", e)
 
     data = {
         "username": user,
@@ -82,8 +124,15 @@ def save_to_parse(user, link, summary, thumbnail_url):
         "tags": summary["tags"],
         "location": summary["geocode"],  # string version
         "geocode": geo_point,             # GeoPoint for mapping
-        "thumbnail_url": thumbnail_url
+        "thumbnail_url": thumbnail_url,
+        "media_url": summary.get("media_url", thumbnail_url)
     }
+
+    if parse_file:
+        data["thumbnail"] = {
+            "__type": "File",
+            "name": parse_file.get("name")
+        }
 
     full_url = PARSE_SERVER_URL.rstrip("/") + "/classes/aRM_ReelsData"
     r = requests.post(full_url, headers=headers, json=data)
