@@ -138,19 +138,36 @@ def save():
 
 @app.route("/analyzeSave", methods=["POST"])
 def analyze_save():
-    data = request.json
-    url = urlparse(data.get("link", ""))
-    full_url = f"{url.scheme}://{url.netloc}{url.path}"
-    user = data.get("user", "")
-    description, thumbnail = extract_ig_data(full_url)
-    llm_result = analyze_with_llm(description)
-    summary_json = json.loads(llm_result["choices"][0]["message"]["content"])
-    status, response = save_to_parse(user, full_url, summary_json, thumbnail)
+    try:
+        data = request.json
+        url = urlparse(data.get("link", ""))
+        full_url = f"{url.scheme}://{url.netloc}{url.path}"
+        user = data.get("user", "")
 
-    tags_str = ", ".join([f"#{tag}" for tag in summary_json["tags"]])
-    reply_text = f"🚀 Saved!\n📍 {summary_json['title']}\n🌍 Location: {summary_json.get('location') or summary_json['geocode']}\n📄 Tags: {tags_str}\n📷 [View Post]({full_url})"
+        description, thumbnail = extract_ig_data(full_url)
+        llm_result = analyze_with_llm(description)
 
-    return jsonify({"messages": [{"text": reply_text}]})
+        raw_content = llm_result["choices"][0]["message"]["content"]
+        print("🧠 Raw LLM content:\n", raw_content)
+
+        try:
+            summary_json = json.loads(raw_content)
+        except json.JSONDecodeError as e:
+            print("❌ JSON parse failed:", e)
+            return jsonify({"error": "Invalid response from LLM", "raw": raw_content}), 500
+
+        status, response = save_to_parse(user, full_url, summary_json, thumbnail)
+
+        tags_str = ", ".join([f"#{tag}" for tag in summary_json["tags"]])
+        reply_text = f"🚀 Saved!\n📍 {summary_json['title']}\n🌍 Location: {summary_json.get('location') or summary_json['geocode']}\n📄 Tags: {tags_str}\n📷 [View Post]({full_url})"
+
+        return jsonify({"messages": [{"text": reply_text}]})
+
+    except Exception as e:
+        import traceback
+        print("❌ Error in /analyzeSave:", e)
+        traceback.print_exc()
+        return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
