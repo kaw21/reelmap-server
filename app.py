@@ -1,3 +1,41 @@
+from flask import Flask, request, jsonify
+import requests
+from bs4 import BeautifulSoup
+import os
+import json
+import base64
+from PIL import Image
+from io import BytesIO
+from urllib.parse import urlparse
+
+app = Flask(__name__)
+
+# Load environment variables
+AIML_API_KEY = os.environ.get("AIMLAPI_KEY")
+PARSE_SERVER_URL = os.environ.get("PARSE_SERVER_URL")
+PARSE_APP_ID = os.environ.get("PARSE_APP_ID")
+PARSE_API_KEY = os.environ.get("PARSE_API_KEY")
+
+def extract_ig_data(url):
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Accept-Language": "en-US,en;q=0.9"
+    }
+    r = requests.get(url, headers=headers)
+    soup = BeautifulSoup(r.text, "html.parser")
+    desc, thumb = "", ""
+
+    for tag in soup.find_all("meta"):
+        if tag.get("property") == "og:description":
+            desc = tag.get("content")
+        elif tag.get("property") == "og:image":
+            thumb = tag.get("content")
+
+    if not desc:
+        desc = "This Instagram post features a travel destination or food experience shared by a user."
+
+    return desc, thumb
+
 def analyze_with_llm(desc):
     headers = {
         "Content-Type": "application/json",
@@ -9,33 +47,19 @@ def analyze_with_llm(desc):
             {
                 "role": "system",
                 "content": (
-                    "You are an expert in analyzing Instagram Reels. Given a caption or video description, extract:
-"
-                    "- title (short summary of the post)
-"
-                    "- description (one-paragraph description of the scene)
-"
-                    "- tags (list of 3–5 relevant hashtags without the # symbol)
-"
-                    "- location (human-readable name)
-"
-                    "- geocode (object with lat and lng as float numbers)
-
-"
-                    "Respond ONLY in this exact JSON format:
-"
-                    "{
-"
-                    "  \"title\": \"...\",
-"
-                    "  \"description\": \"...\",
-"
-                    "  \"tags\": [\"tag1\", \"tag2\"],
-"
-                    "  \"location\": \"...\",
-"
-                    "  \"geocode\": { \"lat\": 22.123, \"lng\": 114.456 }
-"
+                    "You are an expert in analyzing Instagram Reels. Given a caption or video description, extract:\n"
+                    "- title (short summary of the post)\n"
+                    "- description (one-paragraph description of the scene)\n"
+                    "- tags (list of 3–5 relevant hashtags without the # symbol)\n"
+                    "- location (human-readable name)\n"
+                    "- geocode (object with lat and lng as float numbers)\n\n"
+                    "Respond ONLY in this exact JSON format without explanations or extra text:\n"
+                    "{\n"
+                    "  \"title\": \"...\",\n"
+                    "  \"description\": \"...\",\n"
+                    "  \"tags\": [\"tag1\", \"tag2\"],\n"
+                    "  \"location\": \"...\",\n"
+                    "  \"geocode\": { \"lat\": 22.123, \"lng\": 114.456 }\n"
                     "}"
                 )
             },
