@@ -1,3 +1,25 @@
-.env
-*.pyc
+# Byte-compiled / optimized / DLL files
 __pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+.venv/
+env/
+venv/
+
+# Environment variables (if stored locally)
+.env
+
+# macOS files
+.DS_Store
+
+# VSCode settings
+.vscode/
+
+# Flask-related
+instance/
+*.log
+
+# Render or deploy artifacts
+*.sqlite3
